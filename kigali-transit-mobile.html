@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Kigali Transit</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:#080e1a;font-family:'Plus Jakarta Sans',sans-serif;-webkit-text-size-adjust:100%;overscroll-behavior:none}
+  #app{position:relative;width:100%;height:100%;overflow:hidden}
+  #map{position:absolute;inset:0;z-index:1}
+
+  /* Leaflet */
+  .leaflet-control-zoom{border:none!important;border-radius:14px!important;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.4)!important}
+  .leaflet-control-zoom a{background:#1e293b!important;color:#94a3b8!important;border-bottom:1px solid #334155!important;width:36px!important;height:36px!important;line-height:36px!important;font-size:18px!important}
+  .leaflet-control-zoom a:hover{background:#334155!important;color:#fff!important}
+  .leaflet-control-zoom-in{border-radius:14px 14px 0 0!important}
+  .leaflet-control-zoom-out{border-bottom:none!important;border-radius:0 0 14px 14px!important}
+  .leaflet-control-attribution{background:rgba(8,14,26,0.82)!important;color:#334155!important;font-size:9px!important;border-radius:8px!important;padding:2px 8px!important}
+  .leaflet-control-attribution a{color:#475569!important}
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:3px;height:3px}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+  .hide-scrollbar::-webkit-scrollbar{display:none}
+  .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+
+  /* Animations */
+  @keyframes pulse-out{0%{transform:translate(-50%,-50%) scale(.5);opacity:.9}100%{transform:translate(-50%,-50%) scale(2.8);opacity:0}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+  .blink{animation:blink 2.4s ease-in-out infinite}
+  .slide-up{animation:slideUp .3s cubic-bezier(.4,0,.2,1) both}
+  .fade-in{animation:fadeIn .25s ease both}
+
+  /* UI layer */
+  #ui{position:absolute;inset:0;z-index:10;pointer-events:none}
+  .pointer{pointer-events:auto}
+
+  /* Loading */
+  #loading{position:absolute;inset:0;z-index:50;background:#080e1a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px}
+  .spinner{width:56px;height:56px;border:3px solid #1e293b;border-top-color:#38bdf8;border-radius:50%;animation:spin 1s linear infinite}
+
+  /* Glassmorphism pill */
+  .glass{background:rgba(8,14,26,0.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+
+  /* Bottom sheet */
+  #sheet{position:absolute;left:0;right:0;bottom:0;z-index:30;border-radius:28px 28px 0 0;background:linear-gradient(180deg,#111d30,#080e1a);border:1px solid #162035;border-bottom:none;box-shadow:0 -8px 60px rgba(0,0,0,.65);pointer-events:auto;touch-action:none}
+  #sheet-content{overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+  /* Detail sheet */
+  #detail-sheet{position:absolute;left:0;right:0;bottom:0;z-index:40;border-radius:28px 28px 0 0;background:linear-gradient(180deg,#111d30,#080e1a);border:1px solid #162035;border-bottom:none;box-shadow:0 -8px 60px rgba(0,0,0,.75);pointer-events:auto;transition:transform .3s cubic-bezier(.4,0,.2,1)}
+  #detail-backdrop{position:absolute;inset:0;z-index:39;background:rgba(0,0,0,.35);backdrop-filter:blur(3px);pointer-events:auto;transition:opacity .28s ease}
+
+  /* Chips scroll */
+  #chips{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #chips::-webkit-scrollbar{display:none}
+
+  /* Tab */
+  .tab-btn{flex:1;padding:10px 0;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;transition:color .2s,border-color .2s}
+
+  /* Bus card */
+  .bus-card{width:100%;text-align:left;padding:14px;border-radius:20px;border:1px solid #1a2a42;background:#0d1a2e;cursor:pointer;transition:all .15s;margin-bottom:10px;display:block}
+  .bus-card:active{transform:scale(.98);background:#111d30}
+
+  /* Stop card */
+  .stop-card{width:100%;text-align:left;padding:14px;border-radius:20px;border:1px solid #1a2a42;background:#0d1a2e;cursor:pointer;transition:all .15s;margin-bottom:10px;display:block}
+  .stop-card:active{transform:scale(.98)}
+
+  /* Arrival row */
+  .arrival-row{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;border:1px solid #162035;background:rgba(255,255,255,.02);margin-bottom:8px}
+
+  /* FAB */
+  .fab{width:48px;height:48px;border-radius:16px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .fab:active{transform:scale(.9)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="loading">
+    <div style="width:72px;height:72px;border-radius:24px;background:linear-gradient(135deg,#0ea5e9,#38bdf8);display:flex;align-items:center;justify-content:center;box-shadow:0 0 50px rgba(56,189,248,.35)">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="white"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/><rect x="5" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.4)"/><rect x="10" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.4)"/><rect x="15" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.4)"/></svg>
+    </div>
+    <div style="text-align:center">
+      <div style="font-family:'DM Mono',monospace;font-weight:500;font-size:20px;letter-spacing:.2em;color:#e2e8f0;margin-bottom:8px">KIGALI TRANSIT</div>
+      <div id="load-status" style="color:#64748b;font-size:13px;margin-bottom:20px">Fetching road routes…</div>
+      <div style="display:flex;justify-content:center;gap:8px">
+        <div class="blink" style="width:8px;height:8px;border-radius:50%;background:#38bdf8;animation-delay:0s"></div>
+        <div class="blink" style="width:8px;height:8px;border-radius:50%;background:#38bdf8;animation-delay:.2s"></div>
+        <div class="blink" style="width:8px;height:8px;border-radius:50%;background:#38bdf8;animation-delay:.4s"></div>
+      </div>
+    </div>
+    <div style="background:#0d1525;border:1px solid #1e293b;border-radius:18px;padding:14px 20px;text-align:center;max-width:280px">
+      <div style="font-family:'DM Mono',monospace;color:#475569;font-size:11px;line-height:1.8">
+        Fetching road routes from<br>
+        <span style="color:#38bdf8">router.project-osrm.org</span><br>
+        <span style="color:#334155;font-size:10px">Free · OpenStreetMap · No API key</span>
+      </div>
+    </div>
+  </div>
+  <div id="ui" style="display:none">
+    <!-- Top bar -->
+    <div id="topbar" class="pointer" style="position:absolute;top:0;left:0;right:0;z-index:30;padding-top:10px">
+      <div style="display:flex;justify-content:center;margin-bottom:8px">
+        <div class="glass" style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-radius:999px;border:1px solid #1e293b">
+          <div id="live-dot" class="blink" style="width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;flex-shrink:0"></div>
+          <span id="bus-count" style="color:#38bdf8;font-size:12px;font-weight:500">8 buses live</span>
+          <span style="color:#1e293b">·</span>
+          <span id="clock" style="font-family:'DM Mono',monospace;color:#475569;font-size:11px"></span>
+        </div>
+      </div>
+      <div id="chips" class="hide-scrollbar"></div>
+    </div>
+
+    <!-- FABs -->
+    <div id="fabs" class="pointer" style="position:absolute;right:14px;z-index:30;display:flex;flex-direction:column;gap:10px;bottom:270px">
+      <button id="fab-pause" class="fab glass" style="border:1px solid rgba(248,113,113,.3);box-shadow:0 4px 20px rgba(248,113,113,.15)">
+        <svg id="fab-pause-icon" width="18" height="18" viewBox="0 0 24 24" fill="#f87171"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      </button>
+      <div class="fab glass" style="border:1px solid #1e293b;cursor:default">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#334155"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 008 20c9 0 14-8 14-8S18 10 17 8z"/></svg>
+      </div>
+    </div>
+
+    <!-- Main bottom sheet -->
+    <div id="sheet" class="pointer">
+      <!-- Handle -->
+      <div id="sheet-handle" style="display:flex;flex-direction:column;align-items:center;padding:8px 16px 8px;cursor:grab;user-select:none">
+        <div style="width:36px;height:3px;border-radius:999px;background:#1e293b;margin-bottom:8px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#0ea5e9,#38bdf8);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(56,189,248,.3);flex-shrink:0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/></svg>
+            </div>
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.15em;color:#e2e8f0">KIGALI TRANSIT</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                <div class="blink" style="width:5px;height:5px;border-radius:50%;background:#4ade80;box-shadow:0 0 4px #4ade80"></div>
+                <span id="sheet-summary" style="color:#475569;font-size:10px">Loading…</span>
+              </div>
+            </div>
+          </div>
+          <div id="route-dots" style="display:flex;gap:6px"></div>
+        </div>
+      </div>
+
+      <!-- Animated content -->
+      <div id="sheet-inner" style="overflow:hidden;transition:max-height .32s cubic-bezier(.4,0,.2,1)">
+        <!-- Search -->
+        <div style="padding:0 12px 10px">
+          <div style="position:relative">
+            <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input id="search" type="text" placeholder="Search buses or stops…" style="width:100%;padding:11px 12px 11px 36px;background:#0d1525;border:1px solid #1e293b;border-radius:14px;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s"/>
+          </div>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;border-bottom:1px solid #162035;padding:0 4px">
+          <button class="tab-btn" id="tab-buses" onclick="switchTab('buses')" style="color:#38bdf8;border-bottom-color:#38bdf8">Buses (<span id="bus-tab-count">8</span>)</button>
+          <button class="tab-btn" id="tab-stops" onclick="switchTab('stops')" style="color:#334155">Stops (<span id="stop-tab-count">10</span>)</button>
+        </div>
+        <!-- List -->
+        <div id="sheet-content" style="padding:10px 12px 4px;max-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+        <!-- Stats -->
+        <div id="stats-strip" style="display:flex;border-top:1px solid #162035;margin-top:4px">
+          <div style="flex:1;padding:12px 4px;text-align:center;border-right:1px solid #162035">
+            <div id="stat-ontime" style="font-family:'DM Mono',monospace;color:#4ade80;font-size:22px;font-weight:500;line-height:1">6</div>
+            <div style="font-family:'DM Mono',monospace;color:#334155;font-size:9px;text-transform:uppercase;letter-spacing:.8px;margin-top:3px">On Time</div>
+          </div>
+          <div style="flex:1;padding:12px 4px;text-align:center;border-right:1px solid #162035">
+            <div id="stat-delayed" style="font-family:'DM Mono',monospace;color:#fb923c;font-size:22px;font-weight:500;line-height:1">2</div>
+            <div style="font-family:'DM Mono',monospace;color:#334155;font-size:9px;text-transform:uppercase;letter-spacing:.8px;margin-top:3px">Delayed</div>
+          </div>
+          <div style="flex:1;padding:12px 4px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;color:#38bdf8;font-size:22px;font-weight:500;line-height:1">3</div>
+            <div style="font-family:'DM Mono',monospace;color:#334155;font-size:9px;text-transform:uppercase;letter-spacing:.8px;margin-top:3px">Routes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail backdrop -->
+    <div id="detail-backdrop" style="opacity:0;pointer-events:none;position:absolute;inset:0;z-index:39;background:rgba(0,0,0,.4);backdrop-filter:blur(3px)"></div>
+    <!-- Detail sheet -->
+    <div id="detail-sheet" class="pointer" style="transform:translateY(100%);pointer-events:none"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+═══════════════════════════════════════ */
+const ROUTE_DEFS = [
+  { id:'route-a', name:'Route A', label:'Nyabugogo → Kimironko', color:'#38bdf8',
+    viaPoints:[[-1.9397,30.0574],[-1.9360,30.0650],[-1.9280,30.0810],[-1.9244,30.0892],[-1.9220,30.0938]] },
+  { id:'route-b', name:'Route B', label:'Remera → Downtown',    color:'#fb923c',
+    viaPoints:[[-1.9552,30.1098],[-1.9470,30.0984],[-1.9414,30.0910],[-1.9280,30.0810]] },
+  { id:'route-c', name:'Route C', label:'Kicukiro → CBD',       color:'#f472b6',
+    viaPoints:[[-1.9802,30.0902],[-1.9664,30.0816],[-1.9414,30.0700],[-1.9280,30.0810],[-1.9336,30.0700]] },
+]
+
+const STOPS = [
+  {id:'s1', name:'Nyabugogo Terminal',lat:-1.9397,lng:30.0574,routes:['Route A']},
+  {id:'s2', name:'Kacyiru Bus Park',  lat:-1.9336,lng:30.0700,routes:['Route A','Route C']},
+  {id:'s3', name:'CBD City Centre',   lat:-1.9280,lng:30.0810,routes:['Route A','Route B','Route C']},
+  {id:'s4', name:'Remera Junction',   lat:-1.9244,lng:30.0892,routes:['Route A']},
+  {id:'s5', name:'Kimironko Market',  lat:-1.9220,lng:30.0938,routes:['Route A']},
+  {id:'s6', name:'Remera Bus Park',   lat:-1.9552,lng:30.1098,routes:['Route B']},
+  {id:'s7', name:'Kanombe',           lat:-1.9470,lng:30.0984,routes:['Route B']},
+  {id:'s8', name:'Sonatubes',         lat:-1.9414,lng:30.0910,routes:['Route B']},
+  {id:'s9', name:'Kicukiro Centre',   lat:-1.9802,lng:30.0902,routes:['Route C']},
+  {id:'s10',name:'Gikondo',           lat:-1.9664,lng:30.0816,routes:['Route C']},
+]
+
+const ROUTE_COLORS = {'Route A':'#38bdf8','Route B':'#fb923c','Route C':'#f472b6'}
+
+const NEXT_STOP = {
+  'route-a':['Kacyiru Bus Park','CBD City Centre','Remera Junction','Kimironko Market'],
+  'route-b':['Kanombe','Sonatubes','CBD City Centre'],
+  'route-c':['Gikondo','CBD City Centre','Kacyiru Bus Park'],
+}
+
+let buses = [
+  {id:'Bus 101',route:'Route A',rid:'route-a',speed:28,next:'Kacyiru Bus Park',  eta:'3 min',_p:.00,status:'On Time',pax:24,lat:0,lng:0},
+  {id:'Bus 204',route:'Route A',rid:'route-a',speed:33,next:'CBD City Centre',   eta:'5 min',_p:.22,status:'On Time',pax:39,lat:0,lng:0},
+  {id:'Bus 105',route:'Route B',rid:'route-b',speed:26,next:'Kanombe',           eta:'4 min',_p:.00,status:'Delayed',pax:16,lat:0,lng:0},
+  {id:'Bus 210',route:'Route B',rid:'route-b',speed:36,next:'CBD City Centre',   eta:'6 min',_p:.42,status:'On Time',pax:43,lat:0,lng:0},
+  {id:'Bus 301',route:'Route C',rid:'route-c',speed:31,next:'Gikondo',           eta:'5 min',_p:.00,status:'On Time',pax:30,lat:0,lng:0},
+  {id:'Bus 318',route:'Route C',rid:'route-c',speed:23,next:'CBD City Centre',   eta:'8 min',_p:.40,status:'On Time',pax:32,lat:0,lng:0},
+  {id:'Bus 412',route:'Route A',rid:'route-a',speed:30,next:'Remera Junction',   eta:'4 min',_p:.55,status:'On Time',pax:19,lat:0,lng:0},
+  {id:'Bus 503',route:'Route B',rid:'route-b',speed:28,next:'Sonatubes',         eta:'7 min',_p:.21,status:'Delayed',pax:22,lat:0,lng:0},
+]
+
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+let routeCoords = {}
+let map = null
+let busMarkers = {}
+let stopMarkers = {}
+let polylines = {}
+let glowLines = {}
+let running = true
+let simTimer = null
+let selectedRoute = null
+let selectedBus = null
+let selectedStop = null
+let currentTab = 'buses'
+let searchQuery = ''
+
+/* Sheet snap heights */
+const PEEK = 68
+const HALF = 340
+const FULL = Math.min(680, window.innerHeight * 0.84)
+let sheetH = PEEK
+let isDragging = false
+let dragStartY = 0
+let dragStartH = 0
+
+/* ═══════════════════════════════════════
+   OSRM
+═══════════════════════════════════════ */
+async function fetchOSRM(viaPoints) {
+  const coords = viaPoints.map(([lat,lng]) => `${lng},${lat}`).join(';')
+  const res  = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)
+  const data = await res.json()
+  if (data.code !== 'Ok') throw new Error(data.code)
+  return data.routes[0].geometry.coordinates.map(([lng,lat]) => [lat,lng])
+}
+
+/* ═══════════════════════════════════════
+   POSITION HELPERS
+═══════════════════════════════════════ */
+function lerp(a,b,t){ return a+(b-a)*t }
+function posOnRoute(coords, p) {
+  if (!coords || coords.length < 2) return null
+  const total = coords.length - 1
+  const raw   = Math.min(p, .9999) * total
+  const i     = Math.floor(raw), t = raw - i
+  const A     = coords[Math.min(i, total-1)], B = coords[Math.min(i+1, total)]
+  return [lerp(A[0],B[0],t), lerp(A[1],B[1],t)]
+}
+function calcArrivals(stopId) {
+  const stop = STOPS.find(s => s.id === stopId)
+  if (!stop) return []
+  return buses
+    .filter(b => ROUTE_DEFS.find(r => r.id === b.rid)?.viaPoints && b.lat)
+    .filter(b => { const rd = ROUTE_DEFS.find(r=>r.id===b.rid); return rd?.viaPoints && STOPS.filter(s=>s.routes.some(r=>rd.name===r)).some(s=>s.id===stopId) })
+    .map(b => ({ busId:b.id, rid:b.rid, mins:Math.max(1,Math.round(Math.hypot(b.lat-stop.lat,b.lng-stop.lng)*9000)) }))
+    .sort((a,b)=>a.mins-b.mins).slice(0,4)
+    .map(a => ({...a, eta:`${a.mins} min`}))
+}
+
+/* ═══════════════════════════════════════
+   MARKER HTML
+═══════════════════════════════════════ */
+function busHTML(color, sel) {
+  const s = sel ? 44 : 36
+  return `<div style="position:relative;width:${s}px;height:${s}px">
+    ${sel?`<div style="position:absolute;top:50%;left:50%;width:68px;height:68px;border-radius:50%;background:${color}1a;transform:translate(-50%,-50%);animation:pulse-out 1.8s ease-out infinite;pointer-events:none"></div>`:''}
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${s}px;height:${s}px;background:linear-gradient(145deg,${color},${color}bb);border-radius:${sel?13:10}px;border:${sel?'2.5px solid #fff':'2px solid '+color+'55'};box-shadow:0 4px 18px ${color}66;display:flex;align-items:center;justify-content:center">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="white"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/><rect x="2" y="10" width="20" height="2" fill="rgba(0,0,0,.15)"/><rect x="5" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/><rect x="10" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/><rect x="15" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/></svg>
+    </div></div>`
+}
+function stopHTML(sel) {
+  return `<div style="position:relative;width:18px;height:18px;display:flex;align-items:center;justify-content:center">
+    ${sel?`<div style="position:absolute;top:50%;left:50%;width:30px;height:30px;border-radius:50%;border:1.5px solid #38bdf855;transform:translate(-50%,-50%);animation:pulse-out 1.6s ease-out infinite"></div>`:''}
+    <div style="width:12px;height:12px;border-radius:50%;background:${sel?'#38bdf8':'#fff'};border:2.5px solid #38bdf8;box-shadow:0 0 ${sel?14:6}px ${sel?'#38bdf8aa':'#38bdf844'}"></div>
+  </div>`
+}
+
+/* ═══════════════════════════════════════
+   MAP INIT
+═══════════════════════════════════════ */
+function initMap() {
+  map = L.map('map', { center:[-1.952,30.081], zoom:13, zoomControl:false, preferCanvas:true })
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:19
+  }).addTo(map)
+  L.control.zoom({ position:'bottomright' }).addTo(map)
+
+  STOPS.forEach(stop => {
+    const icon = L.divIcon({ className:'', html:stopHTML(false), iconSize:[18,18], iconAnchor:[9,9] })
+    const mk = L.marker([stop.lat,stop.lng], { icon, zIndexOffset:200 })
+      .addTo(map)
+      .on('click', () => showStop(stop))
+    stopMarkers[stop.id] = mk
+  })
+  setTimeout(() => map.invalidateSize(), 100)
+}
+
+function drawRoutes() {
+  Object.values(polylines).forEach(p => p.remove())
+  Object.values(glowLines).forEach(p => p.remove())
+  polylines = {}; glowLines = {}
+
+  ROUTE_DEFS.forEach(def => {
+    const coords = routeCoords[def.id]
+    if (!coords || coords.length < 2) return
+
+    const glow = L.polyline(coords, { color:def.color, weight:14, opacity:.08, lineCap:'round', lineJoin:'round', interactive:false }).addTo(map)
+    glowLines[def.id] = glow
+
+    const poly = L.polyline(coords, { color:def.color, weight:5, opacity:.88, lineCap:'round', lineJoin:'round' }).addTo(map)
+    polylines[def.id] = poly
+
+    const step = Math.max(1, Math.floor(coords.length/12))
+    for (let i=step; i<coords.length-1; i+=step) {
+      const A=coords[i-1], B=coords[i]
+      const angle = Math.atan2(B[1]-A[1], B[0]-A[0]) * 180/Math.PI
+      const icon = L.divIcon({ className:'', iconSize:[14,14], iconAnchor:[7,7],
+        html:`<div style="transform:rotate(${angle}deg);display:flex;align-items:center;justify-content:center;pointer-events:none"><svg viewBox="0 0 10 10" width="10" height="10" fill="${def.color}" opacity=".7"><polygon points="5,0 10,10 5,7 0,10"/></svg></div>` })
+      L.marker(coords[i], { icon, interactive:false, zIndexOffset:150 }).addTo(map)
+    }
+  })
+  updateRouteStyle()
+}
+
+function updateRouteStyle() {
+  ROUTE_DEFS.forEach(def => {
+    const poly = polylines[def.id], glow = glowLines[def.id]
+    if (!poly) return
+    if (!selectedRoute || selectedRoute === def.id) {
+      poly.setStyle({ opacity:.9, weight: selectedRoute===def.id ? 7 : 5 })
+      glow?.setStyle({ opacity: selectedRoute===def.id ? .18 : .08 })
+    } else {
+      poly.setStyle({ opacity:.1, weight:3 })
+      glow?.setStyle({ opacity:.02 })
+    }
+  })
+}
+
+function updateBusMarkers() {
+  buses.forEach(bus => {
+    if (!bus.lat && !bus.lng) return
+    const def   = ROUTE_DEFS.find(r => r.id===bus.rid)
+    const color = def?.color || '#38bdf8'
+    const isSel = selectedBus?.id === bus.id
+    const s     = isSel ? 44 : 36
+    const icon  = L.divIcon({ className:'', html:busHTML(color,isSel), iconSize:[s,s], iconAnchor:[s/2,s/2] })
+
+    if (busMarkers[bus.id]) {
+      busMarkers[bus.id].setLatLng([bus.lat,bus.lng])
+      busMarkers[bus.id].setIcon(icon)
+      busMarkers[bus.id].off('click').on('click', () => showBus(bus))
+    } else {
+      const mk = L.marker([bus.lat,bus.lng], { icon, zIndexOffset:1000 }).addTo(map).on('click', () => showBus(bus))
+      busMarkers[bus.id] = mk
+    }
+  })
+}
+
+function updateStopMarkers() {
+  STOPS.forEach(stop => {
+    const mk = stopMarkers[stop.id]
+    if (!mk) return
+    const icon = L.divIcon({ className:'', html:stopHTML(selectedStop?.id===stop.id), iconSize:[18,18], iconAnchor:[9,9] })
+    mk.setIcon(icon)
+    mk.off('click').on('click', () => showStop(stop))
+  })
+}
+
+/* ═══════════════════════════════════════
+   SIMULATION
+═══════════════════════════════════════ */
+function initBusPositions() {
+  buses = buses.map(bus => {
+    const coords = routeCoords[bus.rid]
+    const pos = coords ? posOnRoute(coords, bus._p) : null
+    return { ...bus, lat:pos?.[0]||0, lng:pos?.[1]||0 }
+  })
+}
+
+function tick() {
+  buses = buses.map(bus => {
+    const coords = routeCoords[bus.rid]
+    if (!coords) return bus
+    let p = bus._p + .004 + Math.random()*.003
+    if (p >= 1) p = 0
+    const pos   = posOnRoute(coords, p)
+    if (!pos) return bus
+    const speed = Math.round(Math.max(14, bus.speed+(Math.random()-.5)*7))
+    const arr   = NEXT_STOP[bus.rid]||[bus.next]
+    const next  = arr[Math.floor(p*arr.length)%arr.length]||bus.next
+    const eta   = `${Math.max(1,Math.round((1-p)*18))} min`
+    return {...bus, lat:pos[0], lng:pos[1], _p:p, speed, eta, next}
+  })
+  updateBusMarkers()
+  renderList()
+  updateStats()
+  // Update detail sheet if open
+  if (selectedBus) {
+    const updated = buses.find(b => b.id===selectedBus.id)
+    if (updated) { selectedBus = updated; updateDetailHeader() }
+  }
+}
+
+function startSim() {
+  clearInterval(simTimer)
+  if (running) simTimer = setInterval(tick, 3000)
+}
+function togglePause() {
+  running = !running
+  const icon = document.getElementById('fab-pause-icon')
+  const btn  = document.getElementById('fab-pause')
+  if (running) {
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>'
+    icon.setAttribute('fill','#f87171')
+    btn.style.borderColor = 'rgba(248,113,113,.3)'
+    btn.style.boxShadow   = '0 4px 20px rgba(248,113,113,.15)'
+  } else {
+    icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>'
+    icon.setAttribute('fill','#4ade80')
+    btn.style.borderColor = 'rgba(74,222,128,.3)'
+    btn.style.boxShadow   = '0 4px 20px rgba(74,222,128,.15)'
+  }
+  const dot = document.getElementById('live-dot')
+  dot.style.background  = running ? '#4ade80' : '#f87171'
+  dot.style.boxShadow   = `0 0 6px ${running?'#4ade80':'#f87171'}`
+  startSim()
+}
+
+/* ═══════════════════════════════════════
+   CLOCK
+═══════════════════════════════════════ */
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+}
+setInterval(updateClock, 1000)
+updateClock()
+
+/* ═══════════════════════════════════════
+   CHIPS
+═══════════════════════════════════════ */
+function buildChips() {
+  const el = document.getElementById('chips')
+  el.innerHTML = `<button onclick="filterRoute(null)" class="glass" style="flex-shrink:0;padding:8px 16px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(51,65,85,.8);color:#94a3b8;cursor:pointer;white-space:nowrap;transition:all .15s;background:rgba(8,14,26,.88)" id="chip-all">All Routes</button>` +
+    ROUTE_DEFS.map(r => `<button onclick="filterRoute('${r.id}')" class="glass" style="flex-shrink:0;display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;border:1px solid ${r.color}55;color:${r.color};cursor:pointer;white-space:nowrap;transition:all .15s;background:rgba(8,14,26,.88)" id="chip-${r.id}"><div style="width:7px;height:7px;border-radius:50%;background:${r.color}"></div>${r.name}</button>`).join('')
+
+  const dots = document.getElementById('route-dots')
+  dots.innerHTML = ROUTE_DEFS.map(r => `<div style="width:8px;height:8px;border-radius:50%;background:${r.color};box-shadow:0 0 5px ${r.color}"></div>`).join('')
+}
+
+function filterRoute(rid) {
+  selectedRoute = rid
+  document.getElementById('chip-all').style.background = !rid ? '#e2e8f0' : 'rgba(8,14,26,.88)'
+  document.getElementById('chip-all').style.color      = !rid ? '#0f172a' : '#94a3b8'
+  document.getElementById('chip-all').style.borderColor= !rid ? '#e2e8f0' : 'rgba(51,65,85,.8)'
+  ROUTE_DEFS.forEach(r => {
+    const el = document.getElementById('chip-'+r.id)
+    if (!el) return
+    const active = rid === r.id
+    el.style.background  = active ? `${r.color}22` : 'rgba(8,14,26,.88)'
+    el.style.borderColor = active ? r.color : `${r.color}55`
+    el.style.boxShadow   = active ? `0 0 12px ${r.color}33` : 'none'
+  })
+  updateRouteStyle()
+  renderList()
+}
+
+/* ═══════════════════════════════════════
+   SHEET DRAG
+═══════════════════════════════════════ */
+function snapHeight(h) {
+  const snaps = [PEEK, HALF, FULL]
+  return snaps.reduce((a,b) => Math.abs(b-h) < Math.abs(a-h) ? b : a)
+}
+function applySheetHeight(h, animate=true) {
+  sheetH = h
+  const sheet = document.getElementById('sheet')
+  const inner = document.getElementById('sheet-inner')
+  const content = document.getElementById('sheet-content')
+  sheet.style.transition = animate ? 'height .32s cubic-bezier(.4,0,.2,1)' : 'none'
+  sheet.style.height = h + 'px'
+  const contentH = Math.max(0, h - PEEK - 100)
+  inner.style.maxHeight = h > PEEK + 20 ? (contentH + 'px') : '0'
+  content.style.maxHeight = Math.max(0, h - PEEK - 170) + 'px'
+
+  // Move FABs
+  document.getElementById('fabs').style.bottom = (h + 12) + 'px'
+}
+
+const handle = document.getElementById('sheet-handle')
+handle.addEventListener('pointerdown', e => {
+  isDragging = true
+  dragStartY = e.clientY
+  dragStartH = sheetH
+  handle.setPointerCapture(e.pointerId)
+  handle.style.cursor = 'grabbing'
+})
+handle.addEventListener('pointermove', e => {
+  if (!isDragging) return
+  const delta = dragStartY - e.clientY
+  const next  = Math.max(PEEK, Math.min(FULL, dragStartH + delta))
+  applySheetHeight(next, false)
+})
+handle.addEventListener('pointerup', () => {
+  isDragging = false
+  handle.style.cursor = 'grab'
+  applySheetHeight(snapHeight(sheetH))
+})
+handle.addEventListener('click', () => {
+  const snaps = [PEEK, HALF, FULL]
+  const idx   = snaps.indexOf(snapHeight(sheetH))
+  applySheetHeight(snaps[(idx+1)%snaps.length])
+})
+
+/* ═══════════════════════════════════════
+   TABS + SEARCH
+═══════════════════════════════════════ */
+function switchTab(t) {
+  currentTab = t
+  document.getElementById('tab-buses').style.color = t==='buses'?'#38bdf8':'#334155'
+  document.getElementById('tab-buses').style.borderBottomColor = t==='buses'?'#38bdf8':'transparent'
+  document.getElementById('tab-stops').style.color = t==='stops'?'#38bdf8':'#334155'
+  document.getElementById('tab-stops').style.borderBottomColor = t==='stops'?'#38bdf8':'transparent'
+  renderList()
+}
+
+document.getElementById('search').addEventListener('input', e => {
+  searchQuery = e.target.value.toLowerCase()
+  renderList()
+})
+document.getElementById('search').addEventListener('focus', e => {
+  e.target.style.borderColor = '#38bdf8'
+  if (sheetH < HALF) applySheetHeight(HALF)
+})
+document.getElementById('search').addEventListener('blur', e => {
+  e.target.style.borderColor = '#1e293b'
+})
+
+/* ═══════════════════════════════════════
+   RENDER LIST
+═══════════════════════════════════════ */
+function renderList() {
+  const el = document.getElementById('sheet-content')
+  const q  = searchQuery
+
+  if (currentTab === 'buses') {
+    const filtered = buses.filter(b =>
+      (!selectedRoute || b.rid===selectedRoute) &&
+      (!q || b.id.toLowerCase().includes(q) || b.route.toLowerCase().includes(q) || b.next.toLowerCase().includes(q))
+    )
+    document.getElementById('bus-tab-count').textContent = filtered.length
+    el.innerHTML = filtered.map(bus => {
+      const def   = ROUTE_DEFS.find(r=>r.id===bus.rid)
+      const color = def?.color||'#38bdf8'
+      const isOT  = bus.status==='On Time'
+      return `<div class="bus-card" onclick="showBus(buses.find(b=>b.id==='${bus.id}'))">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,${color},${color}b0);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 14px ${color}44">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/><rect x="5" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/><rect x="10" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/><rect x="15" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.5)"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-family:'DM Mono',monospace;color:#e2e8f0;font-size:15px;font-weight:500">${bus.id}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;background:${isOT?'rgba(74,222,128,.1)':'rgba(251,146,60,.1)'};color:${isOT?'#4ade80':'#fb923c'};border:1px solid ${isOT?'rgba(74,222,128,.2)':'rgba(251,146,60,.2)'}">${bus.status}</span>
+            </div>
+            <div style="color:#475569;font-size:11px;margin-bottom:6px">${bus.route} · ${bus.next}</div>
+            <div style="display:flex;gap:10px">
+              <span style="font-family:'DM Mono',monospace;color:#94a3b8;font-size:10px">⚡ ${bus.speed} km/h</span>
+              <span style="font-family:'DM Mono',monospace;color:#94a3b8;font-size:10px">⏱ ${bus.eta}</span>
+              <span style="font-family:'DM Mono',monospace;color:#94a3b8;font-size:10px">👥 ${bus.pax}</span>
+            </div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="2" style="flex-shrink:0"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </div>`
+    }).join('')
+  } else {
+    const filtered = STOPS.filter(s => !q || s.name.toLowerCase().includes(q))
+    document.getElementById('stop-tab-count').textContent = filtered.length
+    el.innerHTML = filtered.map(stop => `
+      <div class="stop-card" onclick="showStop(STOPS.find(s=>s.id==='${stop.id}'))">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:46px;height:46px;border-radius:50%;border:2.5px solid #38bdf8;background:#080e1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 12px rgba(56,189,248,.2)">
+            <div style="width:14px;height:14px;border-radius:50%;border:2px solid #38bdf8;background:#080e1a"></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="color:#e2e8f0;font-size:13px;font-weight:600;margin-bottom:5px">${stop.name}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              ${stop.routes.map(r=>`<span style="font-family:'DM Mono',monospace;font-size:9px;padding:2px 7px;border-radius:999px;font-weight:700;background:${ROUTE_COLORS[r]||'#38bdf8'}1a;color:${ROUTE_COLORS[r]||'#38bdf8'};border:1px solid ${ROUTE_COLORS[r]||'#38bdf8'}44">${r}</span>`).join('')}
+            </div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="2" style="flex-shrink:0"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </div>`).join('')
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-ontime').textContent = buses.filter(b=>b.status==='On Time').length
+  document.getElementById('stat-delayed').textContent = buses.filter(b=>b.status==='Delayed').length
+  document.getElementById('sheet-summary').textContent =
+    `${buses.filter(b=>b.status==='On Time').length} on time · ${buses.filter(b=>b.status==='Delayed').length} delayed`
+}
+
+/* ═══════════════════════════════════════
+   DETAIL SHEETS
+═══════════════════════════════════════ */
+function showDetailSheet(html) {
+  const sheet   = document.getElementById('detail-sheet')
+  const backdrop = document.getElementById('detail-backdrop')
+  sheet.innerHTML = html
+  sheet.style.pointerEvents = 'auto'
+  backdrop.style.pointerEvents = 'auto'
+  requestAnimationFrame(() => {
+    sheet.style.transform = 'translateY(0)'
+    backdrop.style.opacity = '1'
+  })
+}
+
+function hideDetailSheet() {
+  const sheet   = document.getElementById('detail-sheet')
+  const backdrop = document.getElementById('detail-backdrop')
+  sheet.style.transform = 'translateY(100%)'
+  backdrop.style.opacity = '0'
+  setTimeout(() => {
+    sheet.style.pointerEvents = 'none'
+    backdrop.style.pointerEvents = 'none'
+    sheet.innerHTML = ''
+    selectedBus  = null
+    selectedStop = null
+    updateBusMarkers()
+    updateStopMarkers()
+  }, 300)
+}
+
+document.getElementById('detail-backdrop').addEventListener('click', hideDetailSheet)
+
+function showBus(bus) {
+  if (!bus) return
+  selectedBus  = bus
+  selectedStop = null
+  updateBusMarkers()
+  map.flyTo([bus.lat, bus.lng], 15, { duration:1.0 })
+  if (sheetH > PEEK + 20) applySheetHeight(PEEK)
+  renderBusDetail(bus)
+}
+
+function renderBusDetail(bus) {
+  const def  = ROUTE_DEFS.find(r=>r.id===bus.rid)
+  const rc   = def?.color||'#38bdf8'
+  const isOT = bus.status==='On Time'
+  showDetailSheet(`
+    <div style="height:3px;background:linear-gradient(90deg,transparent,${rc},${rc}88,transparent)"></div>
+    <div style="display:flex;justify-content:center;padding:14px 0 8px">
+      <div style="width:44px;height:4px;border-radius:999px;background:#1e293b"></div>
+    </div>
+    <div style="padding:0 20px 32px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:56px;height:56px;border-radius:18px;background:linear-gradient(145deg,${rc},${rc}b0);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px ${rc}44;flex-shrink:0">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/><rect x="2" y="10" width="20" height="2" fill="rgba(0,0,0,.15)"/><rect x="5" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.45)"/><rect x="10" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.45)"/><rect x="15" y="6" width="3.5" height="2.5" rx=".5" fill="rgba(255,255,255,.45)"/></svg>
+          </div>
+          <div>
+            <div id="detail-bus-id" style="font-family:'DM Mono',monospace;color:#e2e8f0;font-weight:500;font-size:20px">${bus.id}</div>
+            <div style="color:#475569;font-size:13px;margin-top:2px">${bus.route}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;padding:4px 12px;border-radius:999px;background:${isOT?'rgba(74,222,128,.1)':'rgba(251,146,60,.1)'};color:${isOT?'#4ade80':'#fb923c'};border:1px solid ${isOT?'rgba(74,222,128,.25)':'rgba(251,146,60,.25)'}">${bus.status}</span>
+          <button onclick="hideDetailSheet()" style="width:32px;height:32px;border-radius:50%;background:#1e293b;border:1px solid #334155;color:#64748b;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.color='#e2e8f0'">×</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        ${[{e:'⚡',v:`${bus.speed}`,u:'km/h'},{e:'⏱',v:bus.eta,u:'ETA'},{e:'👥',v:bus.pax,u:'pax'}].map(x=>`
+          <div style="background:rgba(255,255,255,.03);border:1px solid #162035;border-radius:18px;padding:14px 8px;text-align:center">
+            <div style="font-size:22px;margin-bottom:6px">${x.e}</div>
+            <div id="detail-stat-${x.u.replace('/','')}" style="font-family:'DM Mono',monospace;color:#38bdf8;font-weight:500;font-size:15px">${x.v}</div>
+            <div style="font-family:'DM Mono',monospace;color:#334155;font-size:10px;margin-top:3px">${x.u}</div>
+          </div>`).join('')}
+      </div>
+
+      <div style="border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;background:${rc}0a;border:1px solid ${rc}25">
+        <div style="width:40px;height:40px;border-radius:50%;border:2px solid ${rc};background:#080e1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px ${rc}30">
+          <div style="width:10px;height:10px;border-radius:50%;background:${rc}"></div>
+        </div>
+        <div style="flex:1">
+          <div style="font-family:'DM Mono',monospace;color:#334155;font-size:10px;letter-spacing:.8px">NEXT STOP</div>
+          <div id="detail-next" style="color:#e2e8f0;font-size:15px;font-weight:600;margin-top:3px">${bus.next}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'DM Mono',monospace;color:#334155;font-size:10px;letter-spacing:.8px">ETA</div>
+          <div id="detail-eta" style="font-family:'DM Mono',monospace;font-weight:500;font-size:20px;margin-top:3px;color:${rc}">${bus.eta}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-family:'DM Mono',monospace;color:#334155;font-size:10px;text-align:center">${bus.lat?.toFixed(5)}, ${bus.lng?.toFixed(5)}</div>
+    </div>`)
+}
+
+function updateDetailHeader() {
+  const b   = selectedBus
+  if (!b) return
+  const spd = document.getElementById('detail-stat-kmh')
+  const eta = document.getElementById('detail-eta')
+  const nxt = document.getElementById('detail-next')
+  const pax = document.getElementById('detail-stat-pax')
+  if (spd) spd.textContent = `${b.speed}`
+  if (eta) eta.textContent = b.eta
+  if (nxt) nxt.textContent = b.next
+  if (pax) pax.textContent = b.pax
+}
+
+function showStop(stop) {
+  if (!stop) return
+  selectedStop = stop
+  selectedBus  = null
+  updateStopMarkers()
+  map.flyTo([stop.lat, stop.lng], 15, { duration:1.0 })
+  if (sheetH > PEEK + 20) applySheetHeight(PEEK)
+
+  const arrivals = calcArrivals(stop.id)
+  showDetailSheet(`
+    <div style="height:3px;background:linear-gradient(90deg,transparent,#38bdf8,#7dd3fc88,transparent)"></div>
+    <div style="display:flex;justify-content:center;padding:14px 0 8px">
+      <div style="width:44px;height:4px;border-radius:999px;background:#1e293b"></div>
+    </div>
+    <div style="padding:0 20px 32px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:56px;height:56px;border-radius:18px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <div style="width:20px;height:20px;border-radius:50%;border:2.5px solid #38bdf8;background:#080e1a;display:flex;align-items:center;justify-content:center">
+              <div style="width:6px;height:6px;border-radius:50%;background:#38bdf8"></div>
+            </div>
+          </div>
+          <div>
+            <div style="color:#e2e8f0;font-weight:700;font-size:17px">${stop.name}</div>
+            <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
+              ${stop.routes.map(r=>`<span style="font-family:'DM Mono',monospace;font-size:9px;padding:2px 8px;border-radius:999px;font-weight:700;background:${ROUTE_COLORS[r]||'#38bdf8'}1a;color:${ROUTE_COLORS[r]||'#38bdf8'};border:1px solid ${ROUTE_COLORS[r]||'#38bdf8'}44">${r}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+        <button onclick="hideDetailSheet()" style="width:32px;height:32px;border-radius:50%;background:#1e293b;border:1px solid #334155;color:#64748b;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
+      </div>
+
+      <div style="font-family:'DM Mono',monospace;color:#334155;font-size:11px;font-weight:500;letter-spacing:.8px;margin-bottom:12px">INCOMING BUSES</div>
+
+      ${arrivals.length===0
+        ? `<div style="color:#475569;font-size:13px;text-align:center;padding:20px 0;font-style:italic">No buses approaching</div>`
+        : arrivals.map(a => {
+            const def   = ROUTE_DEFS.find(r=>r.id===a.rid)
+            const color = def?.color||'#38bdf8'
+            return `<div class="arrival-row">
+              <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${color};box-shadow:0 0 8px ${color}"></div>
+              <div style="width:40px;height:40px;border-radius:13px;background:${color}18;border:1px solid ${color}33;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="${color}"><rect x="2" y="4" width="20" height="14" rx="3"/><rect x="4" y="2" width="16" height="4" rx="1"/><circle cx="7" cy="20" r="2"/><circle cx="17" cy="20" r="2"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:'DM Mono',monospace;color:#38bdf8;font-size:13px;font-weight:500">${a.busId}</div>
+                <div style="color:#475569;font-size:11px;margin-top:2px">${def?.name||''}</div>
+              </div>
+              <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:${color}">${a.eta}</div>
+            </div>`
+          }).join('')
+      }
+    </div>`)
+}
+
+/* ═══════════════════════════════════════
+   BOOTSTRAP
+═══════════════════════════════════════ */
+async function bootstrap() {
+  initMap()
+  buildChips()
+
+  for (const def of ROUTE_DEFS) {
+    document.getElementById('load-status').textContent = `Loading ${def.name}: ${def.label}…`
+    try {
+      routeCoords[def.id] = await fetchOSRM(def.viaPoints)
+    } catch(e) {
+      console.warn('OSRM fallback for', def.id)
+      routeCoords[def.id] = def.viaPoints
+    }
+  }
+
+  drawRoutes()
+  initBusPositions()
+  updateBusMarkers()
+  renderList()
+  updateStats()
+  applySheetHeight(PEEK, false)
+
+  // Hide loading, show UI
+  document.getElementById('loading').style.opacity = '0'
+  document.getElementById('loading').style.transition = 'opacity .4s'
+  setTimeout(() => {
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('ui').style.display = 'block'
+    map.invalidateSize()
+  }, 400)
+
+  startSim()
+  document.getElementById('fab-pause').addEventListener('click', togglePause)
+}
+
+bootstrap()
+</script>
+</body>
+</html>
